@@ -28,7 +28,7 @@ var (
 
 func init() {
 
-	flag.Int64Var(&timeConf, "timeLeft", 28, "剩余多少时间就触发买key操作")
+	flag.Int64Var(&timeConf, "timeLeft", 45, "剩余多少时间就触发买key操作")
 	flag.StringVar(&fomoAddr, "fomoAddr", "0xa62142888aba8370742be823c1782d17a0389da1", "指定fomo3d的合约地址")
 	flag.StringVar(&node, "node", "https://mainnet.infura.io/YKZGQG2QTBx0tiWoB2IF", "指定以太节点RPC地址")
 	flag.StringVar(&private, "private", "0173e7a434193e8d49c477a6d6d28b6da4c09048aad580bef43956f4d975fb87", "指定私钥")
@@ -45,7 +45,7 @@ func init() {
 	// team 默认购买熊队
 	team = big.NewInt(1)
 	// 开发者劳动收益， 感谢买key用开发者的返佣链接
-	copy(affcode[:], "xxp")
+	copy(affcode[:], "xp")
 }
 
 func main() {
@@ -60,7 +60,10 @@ func main() {
 		log.Fatalf("实例化fomo错误：%v\n", err)
 	}
 
-	timeLeft, _ := getRoundInfo(fomo)
+	timeLeft, _, err := getRoundInfo(fomo)
+	if err != nil {
+		log.Fatalf("getRoundInfo erorr %v\n", err)
+	}
 	timer := time.NewTimer(time.Duration((timeLeft - timeConf)) * time.Second)
 	defer timer.Stop()
 	fmt.Printf("等待\"%v秒\"后，再检查倒计时\n", timeLeft-timeConf)
@@ -68,13 +71,23 @@ func main() {
 	for {
 		select {
 		case <-timer.C:
-			timeLeft, addr := getRoundInfo(fomo)
+			timeLeft, addr, err := getRoundInfo(fomo)
+			if err != nil {
+				log.Printf("getRoundInfo erorr %v\n", err)
+				// go on
+				timer.Reset(0 * time.Second)
+			}
 			if timeLeft-timeConf <= 0 && addr != pubStr {
 				// TODO 做风控，允许设置买key上限
-				buyXname(fomo)
+				if err := buyXname(fomo); err != nil {
+					log.Printf("Fuck .... buy key error %v\n", err)
+					// go on
+					timer.Reset(0 * time.Second)
+				}
+
 				// check Pending tx packed into block
-				log.Println("等待14秒。。。打包后，继续检查倒计时")
-				timer.Reset(14 * time.Second)
+				log.Printf("等待%v秒(timeConf), 打包后继续检查倒计时\n", timeConf)
+				timer.Reset(time.Duration(timeConf) * time.Second)
 			} else {
 				log.Printf("%v秒后，再检查倒计时\n", timeLeft-timeConf)
 				timer.Reset(time.Duration((timeLeft - timeConf)) * time.Second)
@@ -84,16 +97,25 @@ func main() {
 	}
 }
 
-func getRoundInfo(fomo *fomo3d.FoMo3Dlong) (t int64, addr string) {
-	_, _, _, timeEnd, _, _, _, plyAddr, _, _, _, _, _, _, _ := fomo.GetCurrentRoundInfo(nil)
+func getRoundInfo(fomo *fomo3d.FoMo3Dlong) (t int64, addr string, err error) {
+	log.Println("Getting Round info..........")
+	_, _, _, timeEnd, _, _, _, plyAddr, _, _, _, _, _, _, err := fomo.GetCurrentRoundInfo(nil)
+	if err != nil {
+		// timeout ???
+		return 0, "0x0", err
+	}
 	timeNow := time.Now().Unix()
 	timeLeft := timeEnd.Int64() - timeNow
-	fmt.Printf("游戏距离结束时间剩余 %v秒, 目前最后一次买key的地址是 %v\n", timeLeft, plyAddr.String())
-	return timeLeft, plyAddr.String()
+	log.Printf("游戏距离结束时间剩余 %v秒, 目前最后一次买key的地址是 %v\n", timeLeft, plyAddr.String())
+	return timeLeft, plyAddr.String(), nil
 }
 
-func buyXname(fomo *fomo3d.FoMo3Dlong) {
+func buyXname(fomo *fomo3d.FoMo3Dlong) error {
 	vaule, _ := fomo.GetBuyPrice(nil)
+	// 防止多人抢key时，价格波动
+	step := big.NewInt(1000000000000)
+	vaule = vaule.Add(vaule, step)
+
 	// 字符格式的私钥转化为结构体
 	key, _ := crypto.HexToECDSA(private)
 
@@ -109,8 +131,9 @@ func buyXname(fomo *fomo3d.FoMo3Dlong) {
 
 	tx, err := fomo.BuyXname(opts, affcode, team)
 	if err != nil {
-		fmt.Println("buy key error", err)
+		return err
 	}
 
 	fmt.Println("买key FIRE !!! Pending Tx ID is: ", tx.Hash().String())
+	return nil
 }

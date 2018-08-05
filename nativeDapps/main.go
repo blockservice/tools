@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -66,7 +65,7 @@ func main() {
 	}
 	timer := time.NewTimer(time.Duration((timeLeft - timeConf)) * time.Second)
 	defer timer.Stop()
-	fmt.Printf("等待\"%v秒\"后，再检查倒计时\n", timeLeft-timeConf)
+	log.Printf("等待\"%v秒\"后，再检查倒计时\n", timeLeft-timeConf)
 
 	for {
 		select {
@@ -74,20 +73,18 @@ func main() {
 			timeLeft, addr, err := getRoundInfo(fomo)
 			if err != nil {
 				log.Printf("getRoundInfo erorr %v\n", err)
-				// go on
 				timer.Reset(0 * time.Second)
-			}
-			if timeLeft-timeConf <= 0 && addr != pubStr {
+			} else if timeLeft > 0 && timeLeft-timeConf <= 0 && addr != pubStr {
 				// TODO 做风控，允许设置买key上限
-				if err := buyXname(fomo); err != nil {
+				err := buyXname(fomo)
+				if err != nil {
 					log.Printf("Fuck .... buy key error %v\n", err)
-					// go on
 					timer.Reset(0 * time.Second)
+				} else {
+					// check Pending tx packed into block
+					log.Printf("等待%v秒(timeConf), 打包后继续检查倒计时\n", timeConf)
+					timer.Reset(time.Duration(timeConf) * time.Second)
 				}
-
-				// check Pending tx packed into block
-				log.Printf("等待%v秒(timeConf), 打包后继续检查倒计时\n", timeConf)
-				timer.Reset(time.Duration(timeConf) * time.Second)
 			} else {
 				log.Printf("%v秒后，再检查倒计时\n", timeLeft-timeConf)
 				timer.Reset(time.Duration((timeLeft - timeConf)) * time.Second)
@@ -134,6 +131,6 @@ func buyXname(fomo *fomo3d.FoMo3Dlong) error {
 		return err
 	}
 
-	fmt.Println("买key FIRE !!! Pending Tx ID is: ", tx.Hash().String())
+	log.Println("买key FIRE !!! Pending Tx ID is: ", tx.Hash().String())
 	return nil
 }

@@ -27,7 +27,7 @@ var (
 
 func init() {
 
-	flag.Int64Var(&timeConf, "timeLeft", 45, "剩余多少时间就触发买key操作")
+	flag.Int64Var(&timeConf, "timeLeft", 30, "剩余多少时间就触发买key操作")
 	flag.StringVar(&fomoAddr, "fomoAddr", "0xa62142888aba8370742be823c1782d17a0389da1", "指定fomo3d的合约地址")
 	flag.StringVar(&node, "node", "https://mainnet.infura.io/YKZGQG2QTBx0tiWoB2IF", "指定以太节点RPC地址")
 	flag.StringVar(&private, "private", "0173e7a434193e8d49c477a6d6d28b6da4c09048aad580bef43956f4d975fb87", "指定私钥")
@@ -44,7 +44,7 @@ func init() {
 	// team 默认购买熊队
 	team = big.NewInt(1)
 	// 开发者劳动收益， 感谢买key用开发者的返佣链接
-	copy(affcode[:], "xp")
+	copy(affcode[:], "xxp")
 }
 
 func main() {
